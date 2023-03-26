@@ -1,6 +1,10 @@
 /* 
  * strfmt: tiny header only string formatting library
  * public domain / CC0
+ *
+ * this is a header only library. to use it you need
+ * to define STRFMT_IMPLEMENTATION in exactly one
+ * compilation unit before including this file.
  */
 
 #pragma once
@@ -10,13 +14,30 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-const char * strfmt(char* buf, size_t bufLen, const char* format, ...);
-const char * vstrfmt(char* buf, size_t bufLen, const char* format, va_list argp);
+#if defined(__GNUC__) || defined(__clang__)
+    #define STRFMT_ATTR __attribute__((format(printf, 3, 4)))
+    #define VSTRFMT_ATTR __attribute__((format(printf, 3, 0)))
+#else
+    #define STRFMT_ATTR 
+    #define VSTRFMT_ATTR
+#endif
+
+
+const char * strfmt(char* buf, size_t bufLen, const char* format, ...) STRFMT_ATTR;
+const char * vstrfmt(char* buf, size_t bufLen, const char* format, va_list argp) VSTRFMT_ATTR;
+
+
+#undef STRFMT_ATTR
+#undef VSTRFMT_ATTR
+
+/* --------------- Implementation --------------- */
 
 #ifdef STRFMT_IMPLEMENTATION
 
 #define STRFMT_ADD_CHAR(c) if(bufptr<bufLen-1){buf[bufptr++]=c;}else{buf[bufLen-1]='\0';return buf;}
 const char * vstrfmt(char* buf, const size_t bufLen, const char* format, va_list argp) {
+    bool inSpecifier = false;
+    unsigned int bufptr = 0;
     if (buf == NULL || bufLen == 0) {
         return NULL;
     }
@@ -24,16 +45,14 @@ const char * vstrfmt(char* buf, const size_t bufLen, const char* format, va_list
         buf[0] = '\0';
         return buf;
     }
-    bool inSpecifier = false;
-    unsigned int bufptr = 0;
     while(*format != '\0') {
         if (inSpecifier) {
             if (*format == 'x') {
                 const unsigned int num = va_arg(argp, unsigned int);
                 unsigned int nibblesCount = 0;
-                while((1u << (4 * nibblesCount)) <= num) {
+                while((1U << (4 * nibblesCount)) <= num) {
                     nibblesCount++;
-                    if ((1u << (4 * nibblesCount)) > UINT_MAX >> 4u) {
+                    if ((1U << (4 * nibblesCount)) > UINT_MAX >> 4U) {
                         nibblesCount++;
                         break;
                     }
@@ -41,10 +60,10 @@ const char * vstrfmt(char* buf, const size_t bufLen, const char* format, va_list
                 if (nibblesCount == 0) {
                     STRFMT_ADD_CHAR('0');
                 } else {
-                    unsigned int i;
+                    unsigned int i = 0;
                     for (i = 0; i < nibblesCount; i++) {
                         STRFMT_ADD_CHAR("0123456789abcdef"
-                                [(num >> (4 * (nibblesCount - i - 1))) & 0xfu]);
+                                [(num >> (4 * (nibblesCount - i - 1))) & 0xfU]);
                     }
                 }
             } else if (*format == 's') {
@@ -72,7 +91,7 @@ const char * vstrfmt(char* buf, const size_t bufLen, const char* format, va_list
 
 const char * strfmt(char* buf, const size_t bufLen, const char* format, ...) {
     va_list argp;
-    const char* retval;
+    const char* retval = NULL;
     va_start(argp, format);
     retval = vstrfmt(buf, bufLen, format, argp);
     va_end(argp);
